@@ -31,6 +31,8 @@ app.use(
 // database
 const db = require("./app/models");
 const Role = db.role;
+const User=db.user;
+//const UserROle
 
 db.sequelize.sync();
 // force: true will drop the table if it already exists
@@ -69,4 +71,16 @@ function initial() {
     id: 3,
     name: "admin",
   });
+  
 }
+function createuser(){
+  User.create({
+    id:1,
+    username:"admin",
+    email:"daniu@rjeys.com",
+    password:"admin"
+  })
+}
+
+//initial()
+//createuser()

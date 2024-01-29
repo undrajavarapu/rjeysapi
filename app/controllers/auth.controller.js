@@ -42,7 +42,7 @@ exports.signin = async (req, res) => {
   try {
     const user = await User.findOne({
       where: {
-        username: req.body.username,
+        email: req.body.email,
       },
     });
 
@@ -61,7 +61,7 @@ exports.signin = async (req, res) => {
       });
     }
 
-    const token = jwt.sign({ id: user.id },
+    const token = jwt.sign({ id: user.id ,username:user.username,email:user.email},
                            config.secret,
                            {
                             algorithm: 'HS256',
@@ -77,12 +77,16 @@ exports.signin = async (req, res) => {
 
     req.session.token = token;
 
-    return res.status(200).send({
-      id: user.id,
+    return res.status(200).send(token
+      
+      //{
+      /* id: user.id,
       username: user.username,
       email: user.email,
-      roles: authorities,
-    });
+      roles: authorities, */
+      
+   // }
+    );
   } catch (error) {
     return res.status(500).send({ message: error.message });
   }
