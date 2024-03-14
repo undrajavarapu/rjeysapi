@@ -1,7 +1,9 @@
 const db = require("../models");
 const config = require("../config/auth.config");
-const User = db.user;
-const Role = db.role;
+
+// const User = db.user;
+// const Role = db.role;
+const { user: User, role: Role, refreshToken: RefreshToken } = db;
 
 const Op = db.Sequelize.Op;
 
@@ -27,7 +29,8 @@ exports.signup = async (req, res) => {
       });
 
       const result = user.setRoles(roles);
-      if (result) res.send({ message: "User registered successfully!" });
+     // console.log("DDDD:",result)
+      if (result) res.send({ message: "User registered successfully!"});
     } else {
       // user has role = 1
       const result = user.setRoles([1]);
@@ -39,6 +42,7 @@ exports.signup = async (req, res) => {
 };
 
 exports.signin = async (req, res) => {
+  debugger
   try {
     const user = await User.findOne({
       where: {
@@ -56,19 +60,24 @@ exports.signin = async (req, res) => {
     );
 
     if (!passwordIsValid) {
+      debugger
       return res.status(401).send({
-        message: "Invalid Password!",
+        message: "Invalid password!",
       });
     }
 
-    const token = jwt.sign({ id: user.id ,username:user.username,email:user.email},
-                           config.secret,
-                           {
-                            algorithm: 'HS256',
-                            allowInsecureKeySizes: true,
-                            expiresIn: 86400, // 24 hours
-                           });
+    // const token = jwt.sign({ id: user.id ,username:user.username,email:user.email},
+    //                        config.secret,
+    //                        {
+    //                         algorithm: 'HS256',
+    //                         allowInsecureKeySizes: true,
+    //                         expiresIn: 86400, // 24 hours
+    //                        });
+  const token = jwt.sign({ id: user.id }, config.secret, {
+                            expiresIn: config.jwtExpiration
+                          });
 
+    let refreshToken = await RefreshToken.createToken(user);
     let authorities = [];
     const roles = await user.getRoles();
     for (let i = 0; i < roles.length; i++) {
@@ -77,21 +86,65 @@ exports.signin = async (req, res) => {
 
     req.session.token = token;
 
-    return res.status(200).send(token
+    return res.status(200).send({
+      id: user.id,
+          username: user.username,
+          email: user.email,
+          roles: authorities,
+          accessToken: token,
+          refreshToken: refreshToken,
+    }
       
-      //{
-      /* id: user.id,
-      username: user.username,
-      email: user.email,
-      roles: authorities, */
       
-   // }
     );
   } catch (error) {
     return res.status(500).send({ message: error.message });
   }
 };
 
+exports.refreshToken = async (req, res) => {
+  const { refreshToken: requestToken } = req.body;
+
+  if (requestToken == null) {
+    return res.status(403).json({ message: "Refresh Token is required!" });
+  }
+
+  try {
+    let refreshToken = await RefreshToken.findOne({ where: { token: requestToken } });
+
+    console.log(refreshToken)
+
+    if (!refreshToken) {
+      res.status(403).json({ message: "Refresh token is not in database!" });
+      return;
+    }
+//console.log()
+    console.log(RefreshToken.verifyExpiration(refreshToken))
+
+    if (RefreshToken.verifyExpiration(refreshToken)) {
+      RefreshToken.destroy({ where: { id: refreshToken.id } });
+      
+      res.status(403).json({
+        message: "Refresh token was expired. Please make a new signin request",
+      });
+      return;
+    }
+
+    const user = await refreshToken.getUser();
+    console.log("user:",user)
+    let newAccessToken = jwt.sign({ id: user.id }, config.secret, {
+      expiresIn: config.jwtExpiration,
+    });
+
+    return res.status(200).json({
+      accessToken: newAccessToken,
+      refreshToken: refreshToken.token,
+    });
+  } catch (err) {
+    console.log(err)
+    return res.status(500).send({ message: err });
+  }
+};
 exports.signout = async (req, res) => {
   try {
     req.session = null;
